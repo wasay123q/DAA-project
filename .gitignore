@@ -1,0 +1,22 @@
+# --- Compiled Object files ---
+*.o
+*.obj
+
+# --- Executables ---
+*.exe
+*.out
+*.app
+route_planner  # In case you build without extension on Linux later
+
+# --- VS Code Local Settings ---
+.vscode/
+*.code-workspace
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db
+
+# --- Build/Debug Folders (If you create them later) ---
+bin/
+build/
+dist/
