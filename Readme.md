@@ -1,4 +1,4 @@
-# Smart City Emergency Response Routing System (SCERRS)
+# Emergency Simulator - Smart City Response System
 
 [![Language](https://img.shields.io/badge/Language-C++-blue.svg)](https://isocpp.org/)
 [![Standard](https://img.shields.io/badge/C++-11-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B11)
@@ -13,6 +13,7 @@
 - [Project Structure](#project-structure)
 - [Installation & Setup](#installation--setup)
 - [Usage Guide](#usage-guide)
+- [Simulation Scenarios](#simulation-scenarios)
 - [Data Format](#data-format)
 - [Features](#features)
 - [Time & Space Complexity](#time--space-complexity)
@@ -24,7 +25,9 @@
 
 ## 🌟 Overview
 
-**SCERRS** (Smart City Emergency Response Routing System) is an intelligent graph-based routing application designed to optimize emergency response times in urban environments. The system calculates the fastest routes for emergency vehicles, handles dynamic road blockages, and identifies isolated zones that may become unreachable during emergencies.
+**Emergency Simulator** is an interactive graph-based emergency response system that simulates real-world crisis scenarios in urban environments. Built on advanced pathfinding algorithms, it calculates optimal routes for emergency vehicles, handles dynamic road blockages, and performs automatic connectivity diagnostics to identify isolated zones during emergencies.
+
+The system features an intuitive menu-driven interface with preset crisis scenarios (Highway Collapse, Industrial Explosion) and a Custom Emergency Builder that automatically scans for unreachable zones when routes fail.
 
 ### What Problem Does It Solve?
 
@@ -78,11 +81,21 @@ The system models the city as a **weighted directed graph**:
 
 ### Graph Representation
 
-The project uses an **Adjacency List** representation:
+The project uses an **Adjacency List** representation with a custom Edge structure:
 
+```cpp
+struct Edge {
+    int destination;  // Target node
+    int weight;       // Travel time in minutes
+};
+
+vector<list<Edge>> adjLists;  // Vector of lists for each node
 ```
-Intersection 0 → [(Node 1, 5min), (Node 2, 10min)]
-Intersection 1 → [(Node 2, 2min), (Node 3, 6min)]
+
+**Example Storage**:
+```
+Node 0 → [(1, 3min), (5, 4min), (20, 5min)]
+Node 1 → [(2, 2min), (6, 3min)]
 ...
 ```
 
@@ -90,6 +103,7 @@ Intersection 1 → [(Node 2, 2min), (Node 3, 6min)]
 - **Space Efficiency**: O(V + E) vs O(V²) for adjacency matrix
 - **Iteration Speed**: Fast traversal of neighbors for sparse graphs
 - **Real-world Fit**: Cities have sparse road networks (not every intersection connects to every other)
+- **Dynamic Operations**: Efficient edge insertion and deletion using `std::list`
 
 ---
 
@@ -113,11 +127,24 @@ Intersection 1 → [(Node 2, 2min), (Node 3, 6min)]
 
 **Code Implementation Highlights**:
 ```cpp
-- Priority Queue: Efficiently retrieves minimum distance node (O(log V))
-- Distance Array: Tracks shortest known distance to each node
-- Parent Array: Reconstructs the actual path taken
-- Early Termination: Stops when destination is reached (optimization)
+priority_queue<pair<int, int>, vector<pair<int, int>>, greater<>> pq;
+vector<int> dist(numVertices, INT_MAX);
+
+// Early termination optimization
+if (u == endVertex) return dist[u];
+
+// Edge relaxation with weight consideration
+if (dist[u] + weight < dist[v]) {
+    dist[v] = dist[u] + weight;
+    pq.push({dist[v], v});
+}
 ```
+
+**Features**:
+- **Min-Heap Priority Queue**: Efficiently retrieves minimum distance node (O(log V))
+- **Distance Array**: Tracks shortest known distance to each node
+- **Early Termination**: Stops immediately when destination is reached
+- **Returns -1**: Indicates unreachable destination
 
 **Time Complexity**: O((V + E) log V) with binary heap priority queue  
 **Space Complexity**: O(V) for distance and parent arrays
@@ -128,10 +155,14 @@ Intersection 1 → [(Node 2, 2min), (Node 3, 6min)]
 
 **How It Works**:
 1. Start at the source node and mark it as visited
-2. Add all unvisited neighbors to a queue
-3. Process queue: mark node as visited, add its neighbors
-4. Continue until queue is empty
-5. Any unvisited nodes are unreachable
+2. Add it to a queue for processing
+3. While queue is not empty:
+   - Dequeue a node
+   - For each neighbor, if unvisited:
+     - Mark as visited
+     - Add to queue
+4. After BFS completes, collect all nodes that remain unvisited
+5. These unvisited nodes form the isolated/unreachable zones
 
 **Algorithm Classification**:
 - **Strategy**: Graph Traversal
@@ -152,30 +183,49 @@ Intersection 1 → [(Node 2, 2min), (Node 3, 6min)]
 │           CityGraph Class               │
 ├─────────────────────────────────────────┤
 │ Private Members:                        │
-│  - numNodes: int                        │
-│  - adj: vector<vector<Edge>>            │
+│  - numVertices: int                     │
+│  - adjLists: vector<list<Edge>>         │
+├─────────────────────────────────────────┤
+│ Edge Structure:                         │
+│  - destination: int                     │
+│  - weight: int (time in minutes)        │
 ├─────────────────────────────────────────┤
 │ Public Methods:                         │
-│  + CityGraph(nodes)                     │
-│  + addRoad(u, v, weight)                │
-│  + removeRoad(u, v)                     │
-│  + getShortestPath(start, end, path)    │
+│  + CityGraph(vertices)                  │
+│  + loadGraph(filename): bool            │
+│  + addEdge(src, dest, weight)           │
+│  + removeEdge(src, dest)                │
+│  + dijkstra(start, end): int            │
 │  + getUnreachableNodes(startNode)       │
-│  + printGraph()                         │
 └─────────────────────────────────────────┘
 ```
 
 ### Data Flow
 
 ```
-city_map.txt → loadCityData() → CityGraph Instance
-                                      ↓
-                              Graph Operations
-                          ┌──────────┴──────────┐
-                    Shortest Path          Connectivity Check
-                    (Dijkstra)                  (BFS)
-                          ↓                       ↓
-                    Route Output          Isolated Zones Output
+          city_map.txt (30 nodes, 40 edges)
+                       ↓
+              loadGraph() with validation
+                       ↓
+              CityGraph Instance
+                       ↓
+         ┌─────────────┴─────────────┐
+         ↓                           ↓
+    Menu System              Emergency Scenarios
+         ↓                           ↓
+    ┌────┴────┬──────────────┬──────┴─────┐
+    ↓         ↓              ↓            ↓
+Standard  Highway      Industrial    Custom
+Dispatch  Collapse     Explosion     Builder
+    ↓         ↓              ↓            ↓
+    └─────────┴──────────────┴────────────┘
+                       ↓
+            ┌──────────┴──────────┐
+            ↓                     ↓
+      dijkstra()           getUnreachableNodes()
+       (Routing)           (Diagnostics)
+            ↓                     ↓
+     Travel Time            Isolated Zones
 ```
 
 ---
@@ -186,28 +236,26 @@ city_map.txt → loadCityData() → CityGraph Instance
 DAA-project/
 │
 ├── data/
-│   └── city_map.txt          # Input: Graph edge definitions (u v weight)
+│   └── city_map.txt          # 30-node city graph (format: u v weight)
 │
 ├── include/
-│   └── CityGraph.h           # Class declaration and interface
+│   └── CityGraph.h           # CityGraph class and Edge struct declaration
 │
 ├── src/
-│   ├── CityGraph.cpp         # Algorithm implementations
-│   └── main.cpp              # Application logic and test scenarios
+│   ├── CityGraph.cpp         # Dijkstra & BFS implementations
+│   └── main.cpp              # Emergency Simulator UI & scenarios
 │
-├── Makefile                  # Build automation
-└── Readme.md                 # Documentation (this file)
+└── Readme.md                 # Project documentation
 ```
 
 ### File Descriptions
 
 | File | Purpose | Key Contents |
 |------|---------|--------------|
-| **CityGraph.h** | Interface definition | Class declaration, constants, type definitions |
-| **CityGraph.cpp** | Algorithm implementation | Dijkstra's algorithm, BFS, graph operations |
-| **main.cpp** | Application entry point | Data loading, scenario testing, output formatting |
-| **city_map.txt** | Graph data | Edge list format: `source destination weight` |
-| **Makefile** | Build system | Compilation rules, dependencies, targets |
+| **CityGraph.h** | Interface definition | CityGraph class, Edge struct, method declarations |
+| **CityGraph.cpp** | Core algorithms | Dijkstra (shortest path), BFS (connectivity), graph operations |
+| **main.cpp** | Emergency Simulator | Menu system, preset scenarios, custom builder, UI utilities |
+| **city_map.txt** | Graph data | 30 nodes, 40 edges (format: `node1 node2 time`) |
 
 ---
 
@@ -215,127 +263,251 @@ DAA-project/
 
 ### Prerequisites
 
-- **C++ Compiler**: GCC/G++ with C++11 support (or later)
-- **Make**: Build automation tool
-- **Operating System**: Linux, macOS, or Windows (with MinGW/WSL)
+- **C++ Compiler**: G++ with C++11 support or later (MinGW-W64 recommended for Windows)
+- **Operating System**: Windows (primary), Linux, or macOS
+- **Terminal**: PowerShell, CMD, or WSL
 
 ### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/wasay123q/DAA-project.git
-cd DAA-project
+cd "DAA project"
 ```
 
 ### Step 2: Verify File Structure
 
 Ensure all required files are present:
 ```bash
-ls -R
+dir /S  # Windows
+ls -R   # Linux/macOS
 ```
 
-Expected output:
+Expected structure:
 ```
-data  include  Makefile  Readme.md  src
+data/city_map.txt
+include/CityGraph.h
+src/CityGraph.cpp, main.cpp
 ```
 
 ### Step 3: Compile the Project
 
-```bash
-make
+**Option 1: Manual Compilation (Windows)**
+```powershell
+g++ -std=c++11 -I include -c src/CityGraph.cpp -o CityGraph.o
+g++ -std=c++11 -I include -c src/main.cpp -o main.o
+g++ CityGraph.o main.o -o route_planner.exe
 ```
 
-This will:
-- Create an `obj/` directory for object files
-- Compile `CityGraph.cpp` and `main.cpp`
-- Link them into executable `SCERRS`
+**Option 2: Single Command**
+```bash
+g++ -std=c++11 -I include src/*.cpp -o route_planner
+```
 
 ### Step 4: Run the Application
 
-```bash
-make run
+**Windows:**
+```powershell
+.\route_planner.exe
 ```
 
-Or directly:
+**Linux/macOS:**
 ```bash
-./SCERRS
+./route_planner
 ```
 
 ### Troubleshooting
 
-**Issue**: `make: command not found`  
-**Solution**: Install build tools:
-- Ubuntu/Debian: `sudo apt-get install build-essential`
-- macOS: `xcode-select --install`
-- Windows: Install MinGW or use WSL
+**Issue**: `g++: command not found`  
+**Solution**: Install C++ compiler:
+- **Windows**: Install MinGW-W64 from [winlibs.com](https://winlibs.com/) or [MSYS2](https://www.msys2.org/)
+- **Ubuntu/Debian**: `sudo apt-get install build-essential`
+- **macOS**: `xcode-select --install`
+
+**Issue**: File not found errors when running  
+**Solution**: Ensure you're in the project root directory and `data/city_map.txt` exists
+```powershell
+Test-Path "data/city_map.txt"  # Should return True
+```
 
 **Issue**: Compilation errors  
-**Solution**: Ensure G++ supports C++11:
+**Solution**: Verify G++ supports C++11:
 ```bash
 g++ --version  # Should be 4.8.1 or higher
 ```
+
+**Issue**: Screen doesn't clear properly  
+**Solution**: This is normal behavior. The `cls` command works on Windows; on Linux/macOS it uses `clear`.
 
 ---
 
 ## 📖 Usage Guide
 
-### Running Test Scenarios
+### Running the Emergency Simulator
 
-The application demonstrates three main scenarios:
+When you launch the application, you'll see an interactive menu:
 
-#### Scenario 1: Normal Traffic Conditions
-Calculates the optimal route from the emergency station (Node 0) to the accident site (Node 5).
-
-**Expected Output**:
 ```
-Time Cost: X mins
-Route: 0 -> 1 -> 2 -> 3 -> 5
-```
+======================================================
+                EMERGENCY SIMULATOR                  
+======================================================
+  [1] Standard Dispatch (Normal Traffic)
+  [2] Preset: Highway Collapse
+  [3] Preset: Industrial Explosion
+  [4] Custom Emergency Builder (With Reachability Scan)
+  [5] Exit
 
-#### Scenario 2: Road Blockage Simulation
-Simulates a blocked road (2→3) and recalculates the route.
-
-**Expected Output**:
-```
-Time Cost: Y mins (Y > X)
-Route: Alternative path avoiding blocked road
+>> Select Option:
 ```
 
-#### Scenario 3: Isolated Zones Detection
-Identifies areas that become unreachable after multiple road blockages.
+### Menu Options Explained
 
-**Expected Output**:
+#### Option 1: Standard Dispatch
+**Purpose**: Calculate optimal emergency response route under normal conditions
+
+**User Inputs**:
+- Start Sector (0-29)
+- Target Sector (0-29)
+
+**Output**:
 ```
-WARNING: The following zones are unreachable from Station 0: 4
+>> Travel Time: 15 mins
+```
+
+**Use Case**: Quick dispatch calculations, baseline routing analysis
+
+---
+
+#### Option 2: Highway Collapse Preset
+**Scenario**: Bridge failure between sectors 24-25, emergency dispatch from 0 → 29
+
+**What Happens**:
+1. Removes edge 24↔25 (simulates collapsed bridge)
+2. Calculates alternate route from sector 0 to 29
+3. Displays adjusted travel time
+
+**Output Example**:
+```
+SCENARIO: Bridge Failure (24-25). Rerouting 0 -> 29.
+>> New Time: 23 mins
+```
+
+**Learning Point**: Demonstrates how system handles infrastructure failures and finds alternate paths
+
+---
+
+#### Option 3: Industrial Explosion Preset
+**Scenario**: Toxic leak at sector 28, emergency dispatch from 5 → 28
+
+**What Happens**:
+1. Calculates fastest route from station 5 to hazard zone 28
+2. Displays travel time for hazmat team deployment
+
+**Output Example**:
+```
+SCENARIO: Toxic Leak (28). Dispatching 5 -> 28.
+>> Time: 18 mins
+```
+
+**Use Case**: Hazmat response, industrial emergency protocols
+
+---
+
+#### Option 4: Custom Emergency Builder ⭐
+**The Most Advanced Feature**: Create your own emergency scenario with automatic diagnostics
+
+**User Inputs**:
+1. **Mission Parameters**:
+   - From Node (dispatch origin)
+   - To Node (emergency destination)
+
+2. **Obstacle Definition**:
+   - Block Road FROM (node U)
+   - Block Road TO (node V)
+
+**Intelligent Behavior**:
+
+**Case A - Route Still Exists**:
+```
+>> SIMULATING BLOCKADE (3 <-> 8)...
+>> RESULT: Route Possible. Time: 21 mins
+```
+
+**Case B - Complete Isolation (AUTO-DIAGNOSTIC)**:
+```
+>> SIMULATING BLOCKADE (13 <-> 14)...
+>> RESULT: CRITICAL FAILURE! Target Unreachable.
+>> DIAGNOSTIC: Scanning for Isolated Zones...
+   [!] The following sectors are completely CUT OFF from Sector 0:
+   [ 14 15 16 17 18 19 29 ]
+```
+
+**Advanced Feature**: When a route becomes impossible, the system **automatically** triggers BFS-based zone scanning to identify **all isolated sectors**, not just the target. This helps emergency coordinators:
+- Allocate helicopter resources
+- Identify evacuation zones
+- Prioritize infrastructure repair
+
+---
+
+## 🎬 Simulation Scenarios
+
+### Preset Scenario Details
+
+| Scenario | Nodes | Blockage | Purpose |
+|----------|-------|----------|---------|
+| **Highway Collapse** | 0 → 29 | 24↔25 removed | Highway infrastructure failure |
+| **Industrial Explosion** | 5 → 28 | None | Hazmat response timing |
+
+### Custom Scenarios You Can Test
+
+```cpp
+// Test 1: City Center Isolation
+From: 0, To: 15, Block: 13-14
+Expected: Shows all east-side sectors cut off
+
+// Test 2: Alternative Route Efficiency
+From: 0, To: 10, Block: 5-10
+Expected: Route via nodes 20 instead
+
+// Test 3: Multiple Blockages (manual testing)
+Run twice with different blocks to simulate cascading failures
 ```
 
 ### Customizing the City Map
 
-Edit [`data/city_map.txt`](data/city_map.txt) to modify the graph structure:
+Edit [data/city_map.txt](data/city_map.txt) to modify the graph structure:
 
-**Format**: Each line represents a directed edge
+**Format**:
 ```
-source_node  destination_node  travel_time
+30                    # First line: total number of nodes
+u v w                 # Each subsequent line: edge from u to v with weight w
 ```
 
 **Example**:
 ```
-0 1 5    # Road from intersection 0 to 1 takes 5 minutes
-1 2 3    # Road from intersection 1 to 2 takes 3 minutes
+30                    # 30 nodes in the graph
+0 1 3                 # Road from node 0 to 1 takes 3 minutes
+1 2 2                 # Road from node 1 to 2 takes 2 minutes
+...
 ```
 
-**Important**: 
-- Nodes are 0-indexed
-- Update `maxNodes` in [`main.cpp`](src/main.cpp#L14) if adding nodes beyond Node 5
-- Weights must be positive integers
+**Important Notes**: 
+- Nodes are **0-indexed** (0 through 29)
+- Graph is **undirected** (edges automatically bidirectional)
+- Weights must be **positive integers** (validated during load)
+- Update `TOTAL_NODES` constant in [main.cpp](src/main.cpp#L44) if changing node count
+- Invalid edges (negative weights, out-of-bounds nodes) are automatically ignored
 
-### Modifying Test Scenarios
+### Modifying Scenarios
 
-Edit [`src/main.cpp`](src/main.cpp) to test different scenarios:
+Edit [src/main.cpp](src/main.cpp) to customize preset scenarios:
 
 ```cpp
-int station = 0;        // Change emergency station location
-int accidentSite = 5;   // Change incident location
-city.removeRoad(2, 3);  // Simulate different road blockages
+// Modify Highway Collapse scenario (Case 2)
+city.removeEdge(24, 25);  // Change blocked road
+int time = city.dijkstra(0, 29);  // Change start/end points
+
+// Modify Industrial Explosion scenario (Case 3)
+int time = city.dijkstra(5, 28);  // Adjust dispatch parameters
 ```
 
 ---
@@ -344,33 +516,56 @@ city.removeRoad(2, 3);  // Simulate different road blockages
 
 ### Input File Structure (city_map.txt)
 
-The current city map represents the following graph:
+The city map represents a **30-node urban network** with 40 bidirectional roads:
 
+**File Structure**:
 ```
-    5min      2min
-  0 ──→ 1 ──→ 2
-  │     │     │
-10│    6│    3│
-  │     │     │
-  └──→  3 ←───┘
-        │
-       5│
-        ↓
-        5
+30              # Header: Total number of nodes
+0 1 3           # Edge: Node 0 ↔ Node 1, 3 minutes
+0 5 4           # Edge: Node 0 ↔ Node 5, 4 minutes
+...
+28 29 5         # Edge: Node 28 ↔ Node 29, 5 minutes
 ```
 
-**Edge List**:
+### City Layout Overview
+
+The graph simulates a realistic urban network with:
+- **Main Highway**: Nodes 0→20→21→22→23→24→25→26→27→28→29 (10 nodes)
+- **City Grid**: Nodes 0-19 (dense interconnected grid)
+- **Bypass Routes**: Multiple alternate paths for redundancy
+- **Critical Junctions**: Nodes 0, 10, 20 (high connectivity)
+
+**Visualization Excerpt**:
 ```
-0 → 1 (5 min)     # Direct route, moderate speed
-0 → 2 (10 min)    # Longer route
-1 → 2 (2 min)     # Fast connecting road
-1 → 3 (6 min)     # Medium route
-2 → 3 (3 min)     # Quick connection
-2 → 4 (9 min)     # Longer route to node 4
-3 → 4 (4 min)     # Alternative to node 4
-3 → 5 (5 min)     # Route to destination
-4 → 5 (1 min)     # Very fast final leg
+       3min   2min   2min
+    0 ──→ 1 ──→ 2 ──→ 3 ──→ 4
+    │4    │3    │5    │4    │3
+    ↓     ↓     ↓     ↓     ↓
+    5 ──→ 6 ──→ 7 ──→ 8 ──→ 9
+   2min        2min        2min
+    ...
+  (Pattern continues to node 29)
 ```
+
+### Edge List (Sample)
+
+| From | To | Time | Description |
+|------|----|----|-------------|
+| 0 | 1 | 3 min | Main arterial road |
+| 0 | 5 | 4 min | Vertical connector |
+| 0 | 20 | 5 min | Highway on-ramp |
+| 24 | 25 | 5 min | **Critical bridge** (Highway Collapse scenario) |
+| 5 | 28 | - | **Not connected** (requires multiple hops) |
+| 10 | 20 | 15 min | Long bypass route |
+
+### Graph Properties
+
+- **Nodes (V)**: 30
+- **Edges (E)**: 40 (undirected, so 80 directed edges internally)
+- **Connectivity**: Fully connected under normal conditions
+- **Diameter**: ~8-10 hops (longest shortest path)
+- **Average Degree**: 2.67 edges per node (sparse graph)
+- **Weight Range**: 2-15 minutes per edge
 
 ---
 
@@ -378,24 +573,39 @@ The current city map represents the following graph:
 
 ### ✅ Core Functionality
 
-- [x] **Shortest Path Calculation**: Dijkstra's algorithm for optimal routing
-- [x] **Dynamic Graph Modification**: Add/remove roads in real-time
-- [x] **Connectivity Analysis**: BFS-based reachability checking
-- [x] **Path Reconstruction**: Complete route from source to destination
-- [x] **Blockage Simulation**: Model traffic incidents and road closures
-- [x] **Delay Analysis**: Compare normal vs. blocked route times
+- [x] **Interactive Menu System**: 5-option menu with input validation
+- [x] **Shortest Path Calculation**: Dijkstra's algorithm with early termination
+- [x] **Dynamic Road Blockage**: Runtime edge removal for emergency simulation
+- [x] **Connectivity Analysis**: BFS-based unreachable zone detection
+- [x] **Preset Crisis Scenarios**: Highway collapse and industrial explosion simulations
+- [x] **Custom Emergency Builder**: User-defined scenarios with auto-diagnostics
+- [x] **Automatic Zone Scanning**: Triggers BFS when routes fail
+- [x] **Input Validation**: Robust error handling for user inputs
+- [x] **Cross-Platform UI**: Screen clearing for Windows/Linux/macOS
+- [x] **Graph Validation**: Ignores invalid edges during file loading
+- [x] **Fresh State per Simulation**: Reloads clean graph for each scenario
+
+### 🔧 Technical Features
+
+- **Undirected Graph**: Bidirectional roads (automatic reverse edge creation)
+- **Weighted Edges**: Time-based routing optimization
+- **Sparse Graph Representation**: Adjacency list with `std::list<Edge>`
+- **Early Path Termination**: Dijkstra stops at destination, not all nodes
+- **Unreachability Detection**: Returns -1 for impossible routes
+- **Memory-Efficient BFS**: Manual queue implementation using vector
 
 ### 📈 Performance Characteristics
 
 | Operation | Time Complexity | Space Complexity |
 |-----------|----------------|------------------|
-| Graph Construction | O(E) | O(V + E) |
-| Add Road | O(1) | O(1) |
-| Remove Road | O(E') | O(1) |
-| Shortest Path | O((V+E) log V) | O(V) |
-| Connectivity Check | O(V + E) | O(V) |
+| Graph Loading | O(E) | O(V + E) |
+| Add Edge | O(1) | O(1) |
+| Remove Edge | O(deg(v)) | O(1) |
+| Shortest Path (Dijkstra) | O((V+E) log V) | O(V) |
+| Connectivity Check (BFS) | O(V + E) | O(V) |
+| Full Simulation Cycle | O((V+E) log V) | O(V + E) |
 
-*E' = average number of edges per node*
+*deg(v) = degree of vertex (average ~3 for this graph)*
 
 ---
 
@@ -441,34 +651,55 @@ For a typical city with:
 
 ### Planned Features
 
-1. **Multi-Source Shortest Paths**
-   - Find nearest emergency station from any incident location
-   - Implementation: Multiple Dijkstra runs or Floyd-Warshall algorithm
+#### 1. **Path Visualization**
+- Display actual route taken (node sequence)
+- Show alternate paths with their costs
+- Implementation: Return path vector from Dijkstra
 
-2. **Real-Time Traffic Integration**
-   - Dynamic weight updates based on current traffic conditions
-   - API integration with traffic monitoring systems
+#### 2. **Multi-Source Dijkstra**
+- Find nearest emergency station from incident location
+- Dispatch from multiple stations simultaneously
+- Implementation: Reverse graph or multiple Dijkstra runs
 
-3. **A* Algorithm Implementation**
-   - Heuristic-based pathfinding for faster computation
-   - Especially useful for large-scale city graphs
+#### 3. **Real-Time Weight Updates**
+- Dynamic traffic condition simulation
+- Time-based edge weight variations (rush hour modeling)
+- Implementation: Update edge weights during runtime
 
-4. **Visualization Module**
-   - Graphical representation of city map
-   - Animated route display
-   - Technology: OpenGL or web-based visualization (D3.js)
+#### 4. **Persistent Blockages**
+- Save and load blocked roads between sessions
+- Scenario management system
+- Implementation: Blockage state file (JSON/XML)
 
-5. **Multi-Criteria Optimization**
-   - Balance multiple factors: time, distance, road quality, safety
-   - Implementation: Weighted sum or Pareto optimization
+#### 5. **Graphical Visualization**
+- Interactive city map display
+- Animated route highlighting
+- Technology stack: SDL2, SFML, or web-based (D3.js)
 
-6. **Historical Data Analysis**
-   - Pattern recognition in emergency response times
-   - Machine learning for predictive routing
+#### 6. **Advanced Algorithms**
+- **A* Algorithm**: Heuristic-based faster pathfinding
+- **Floyd-Warshall**: All-pairs shortest paths pre-computation
+- **Bellman-Ford**: Support for negative weights (traffic delays)
 
-7. **Mobile Application**
-   - Real-time emergency dispatcher interface
-   - GPS integration for actual vehicle tracking
+#### 7. **Multi-Criteria Optimization**
+- Balance time, distance, safety scores
+- Weighted objective function
+- Pareto frontier for multi-objective solutions
+
+#### 8. **Statistical Analysis Module**
+- Average response time calculations
+- Most critical edges/nodes identification
+- Network vulnerability assessment
+
+#### 9. **Batch Scenario Testing**
+- Load scenarios from file
+- Automated testing suite
+- Performance benchmarking
+
+#### 10. **Enhanced Diagnostics**
+- Show why routes fail (which segments are cut)
+- Suggest minimum edges to restore connectivity
+- Implementation: Cut-edge/articulation point detection
 
 ---
 
@@ -532,9 +763,9 @@ For a typical city with:
 
 ---
 
-## 📝 License
+## � License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is an academic assignment for educational purposes. Feel free to use and modify for learning.
 
 ---
 
@@ -543,24 +774,37 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Wasay Ahmad**
 - GitHub: [@wasay123q](https://github.com/wasay123q)
 - Project Repository: [DAA-project](https://github.com/wasay123q/DAA-project)
+- Course: Design and Analysis of Algorithms (5th Semester BSCS)
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Course instructors for algorithm concepts and guidance
-- *Introduction to Algorithms* (CLRS) for algorithmic foundations
-- OpenStreetMap for real-world graph data inspiration
+- **Course Instructors** for algorithm concepts and project guidance
+- **CLRS** (*Introduction to Algorithms*) for Dijkstra and BFS theory
+- **Data Structures & Algorithms** course materials
+- Real-world emergency response systems for inspiration
 
 ---
 
-## 📞 Support
+## 📞 Support & Contact
 
-For questions or issues:
-- Open an issue on GitHub
-- Check existing documentation in code comments
-- Review algorithm textbooks for theoretical background
+### Getting Help
+
+- **Issues**: Open an issue on [GitHub Issues](https://github.com/wasay123q/DAA-project/issues)
+- **Documentation**: Review this README and inline code comments
+- **Algorithm Theory**: Consult CLRS textbook or course materials
+
+### Reporting Bugs
+
+When reporting issues, please include:
+1. Your operating system and compiler version
+2. Exact error message or unexpected behavior
+3. Steps to reproduce the problem
+4. Relevant code snippets or input data
 
 ---
 
-**Built with ❤️ for safer, smarter cities**
+**Built for emergency response optimization and algorithmic learning 🚒🚑🚓**
+
+*Last Updated: December 2025*
