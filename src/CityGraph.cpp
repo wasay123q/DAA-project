@@ -1,119 +1,121 @@
 #include "../include/CityGraph.h"
 #include <iostream>
+#include <fstream>
 #include <queue>
-#include <algorithm>
-#include <set>
+#include <vector>
+#include <climits> // For INT_MAX
+
+using namespace std;
 
 // Constructor
-CityGraph::CityGraph(int nodes) : numNodes(nodes) {
-    adj.resize(nodes);
+CityGraph::CityGraph(int vertices) {
+    this->numVertices = vertices;
+    adjLists.resize(vertices);
 }
 
-// Add a directed weighted edge
-void CityGraph::addRoad(int u, int v, int weight) {
-    if (u >= 0 && u < numNodes && v >= 0 && v < numNodes) {
-        adj[u].push_back({v, weight});
+// 1. Load Map from File (Robust Version)
+bool CityGraph::loadGraph(const string& filename) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "[Error] File not found: " << filename << endl;
+        return false;
     }
-}
 
-// Simulate road blockage by removing an edge
-void CityGraph::removeRoad(int u, int v) {
-    if (u < numNodes) {
-        // Use a lambda to find and remove the specific edge
-        auto& edges = adj[u];
-        for (auto it = edges.begin(); it != edges.end(); ++it) {
-            if (it->first == v) {
-                edges.erase(it);
-                break; // Assuming single directed edge per pair
-            }
-        }
+    int fileNodeCount;
+    if (!(file >> fileNodeCount)) {
+        cerr << "[Error] Map file is empty or missing node count header." << endl;
+        return false;
     }
-}
 
-// Dijkstra's Algorithm Implementation
-// Returns total time cost, fills 'path' vector with the route
-int CityGraph::getShortestPath(int start, int end, std::vector<int>& path) {
-    // Priority queue stores {current_dist, u}
-    std::priority_queue<Edge, std::vector<Edge>, std::greater<Edge>> pq;
+    // Validation: Check if file matches our allocated memory
+    if (fileNodeCount > numVertices) {
+        cerr << "[Warning] Map file contains more nodes (" << fileNodeCount 
+             << ") than system allocated (" << numVertices << ")." << endl;
+        // In real apps, we might resize here, but for now, we warn.
+    }
+
+    int u, v, w;
+    int lineCount = 2; // Start tracking line numbers for error reporting
     
-    std::vector<int> dist(numNodes, INF);
-    std::vector<int> parent(numNodes, -1);
+    while (file >> u >> v >> w) {
+        // VALIDATION 1: Check for Negative Weights
+        if (w < 0) {
+            cerr << "[Data Error] Line " << lineCount << ": Negative weight detected. Skipping." << endl;
+            continue; 
+        }
 
-    dist[start] = 0;
-    pq.push({0, start});
+        // VALIDATION 2: Boundary Checks
+        if (u < 0 || u >= numVertices || v < 0 || v >= numVertices) {
+            cerr << "[Data Error] Line " << lineCount << ": Node index out of bounds (" 
+                 << u << "," << v << "). Max allowed: " << (numVertices - 1) << endl;
+            continue;
+        }
+
+        addEdge(u, v, w);
+        lineCount++;
+    }
+    
+    // Check if loop stopped because of bad formatting (e.g., text instead of numbers)
+    if (!file.eof()) {
+        cerr << "[Warning] File parsing stopped early due to malformed data at line " << lineCount << endl;
+    }
+
+    file.close();
+    return true;
+}
+
+// 2. Add a Road
+void CityGraph::addEdge(int src, int dest, int weight) {
+    if (src >= 0 && src < numVertices && dest >= 0 && dest < numVertices) {
+        adjLists[src].push_back({dest, weight});
+        // Since roads are two-way, add the reverse connection too
+        adjLists[dest].push_back({src, weight});
+    }
+}
+
+// 3. Remove a Road (Blockage simulation)
+void CityGraph::removeEdge(int src, int dest) {
+    // Remove connection from Src to Dest
+    adjLists[src].remove_if([dest](const Edge& e) { return e.destination == dest; });
+    
+    // Remove connection from Dest to Src (Two-way road)
+    adjLists[dest].remove_if([src](const Edge& e) { return e.destination == src; });
+}
+
+// 4. Dijkstra's Algorithm (The Shortest Path Finder)
+int CityGraph::dijkstra(int startVertex, int endVertex) {
+    // Priority Queue to store pairs of (distance, vertex)
+    // Ordered by smallest distance first
+    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;
+
+    // Distances initialized to Infinity
+    vector<int> dist(numVertices, INT_MAX);
+
+    // Start node distance is 0
+    dist[startVertex] = 0;
+    pq.push({0, startVertex});
 
     while (!pq.empty()) {
         int u = pq.top().second;
         int d = pq.top().first;
         pq.pop();
 
-        // Optimization: If we found the destination, stop early
-        if (u == end) break;
+        // If we reached the target, return the time
+        if (u == endVertex) return dist[u];
+
+        // If current distance is greater than already found shortest, skip
         if (d > dist[u]) continue;
 
-        for (auto& edge : adj[u]) {
-            int v = edge.first;
-            int weight = edge.second;
+        // Explore neighbors
+        for (auto& edge : adjLists[u]) {
+            int v = edge.destination;
+            int weight = edge.weight;
 
             if (dist[u] + weight < dist[v]) {
                 dist[v] = dist[u] + weight;
-                parent[v] = u;
                 pq.push({dist[v], v});
             }
         }
     }
-
-    // Reconstruct path
-    path.clear();
-    if (dist[end] == INF) return -1; // Path not found
-
-    for (int v = end; v != -1; v = parent[v]) {
-        path.push_back(v);
-    }
-    std::reverse(path.begin(), path.end());
-
-    return dist[end];
-}
-
-// Identify unreachable zones using BFS
-std::vector<int> CityGraph::getUnreachableNodes(int startNode) {
-    std::vector<bool> visited(numNodes, false);
-    std::queue<int> q;
-
-    visited[startNode] = true;
-    q.push(startNode);
-
-    while (!q.empty()) {
-        int u = q.front();
-        q.pop();
-
-        for (auto& edge : adj[u]) {
-            int v = edge.first;
-            if (!visited[v]) {
-                visited[v] = true;
-                q.push(v);
-            }
-        }
-    }
-
-    // Collect all unvisited nodes
-    std::vector<int> unreachable;
-    for (int i = 0; i < numNodes; ++i) {
-        if (!visited[i]) {
-            unreachable.push_back(i);
-        }
-    }
-    return unreachable;
-}
-
-void CityGraph::printGraph() const {
-    std::cout << "\n--- Current City Map Configuration ---\n";
-    for (int i = 0; i < numNodes; ++i) {
-        std::cout << "Intersection " << i << " connects to: ";
-        for (const auto& edge : adj[i]) {
-            std::cout << "[Node " << edge.first << " | " << edge.second << "m] ";
-        }
-        std::cout << "\n";
-    }
-    std::cout << "--------------------------------------\n";
+    return -1; // If unreachable
 }
