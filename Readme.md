@@ -771,7 +771,7 @@ This project is an academic assignment for educational purposes. Feel free to us
 
 ## 👨‍💻 Author
 
-**Wasay Ahmad**
+**Abdul Wasay Sial**
 - GitHub: [@wasay123q](https://github.com/wasay123q)
 - Project Repository: [DAA-project](https://github.com/wasay123q/DAA-project)
 - Course: Design and Analysis of Algorithms (5th Semester BSCS)
