@@ -25,8 +25,11 @@ public:
     void addEdge(int src, int dest, int weight);
     void removeEdge(int src, int dest);
     
-    // The "Brain" (Algorithm)
+    // The "Brain" (Dijkstra - Time Calculation)
     int dijkstra(int startVertex, int endVertex);
+
+    // The "Diagnostic Tool" (BFS - Connectivity Check)
+    std::vector<int> getUnreachableNodes(int startNode);
 };
 
 #endif
